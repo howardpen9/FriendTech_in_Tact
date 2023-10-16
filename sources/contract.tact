@@ -1,253 +1,328 @@
 const minTonsForStorage: Int = ton("0.03");
 const gasConsumption: Int = ton("0.03");
 
-contract NftCollection {
-    next_item_index: Int as uint32 = 0;
-    owner_address: Address;
-    royalty_params: RoyaltyParams;                      
-    collection_content: Cell;   
+message Create {
+    owner: Address;
+}
 
-    init(owner_address: Address, collection_content: Cell, royalty_params: RoyaltyParams){
-        self.owner_address = owner_address;
-        self.collection_content = collection_content; 
-        self.royalty_params = royalty_params;
+message FinishedBuy {
+    query_id: Int as uint64;
+    charge_ton: Int as coins;
+    amount: Int as uint16;
+    final_supply: Int as uint16;
+    original_sender: Address;
+    index: Int as uint32;
+}
+
+message Redeem {
+    query_id: Int as uint64;
+    redeem_ton: Int as coins;
+    amount: Int as uint16;
+    final_supply: Int as uint16;
+    index: Int as uint32;
+    sender: Address;
+}
+
+contract Main {
+    index: Int as uint32 = 0;
+    fee: Int as uint8;
+    admin: Address;
+
+    init(admin: Address) {
+        self.admin = admin;
+        self.fee = 50;
     }
 
-    receive("Mint"){
-        let ctx: Context = context(); // get sender Info
-        let msgValue: Int = ctx.value;
-        let tonBalanceBeforeMsg: Int = myBalance() - msgValue;
-        let storageFee: Int = minTonsForStorage - min(tonBalanceBeforeMsg, minTonsForStorage);
-        msgValue = msgValue - (storageFee + gasConsumption);
-        self.mint(ctx.sender, msgValue);
-    }
-
-    // ===== Private Methods ===== //
-    fun mint(sender: Address, msgValue: Int) {
-        require(self.next_item_index >= 0, "non-sequential NFTs");
-        let nft_init: StateInit = self.getNftItemInit(self.next_item_index);
+    receive(msg: Create) {
+        require(context().sender == self.admin, "not admin");
+        let initCode: StateInit = initOf Role(myAddress(), self.index, self.admin);
+        self.index = self.index + 1;
         send(SendParameters{
-                to: contractAddress(nft_init), 
-                value: msgValue, 
-                bounce: false,
-                mode: SendIgnoreErrors,
-                body: Transfer {
-                    query_id: 0,
-                    new_owner: sender,
-                    response_destination: self.owner_address,
-                    custom_payload: emptyCell(),
-                    forward_amount: 0,
-                    forward_payload: emptySlice()
-                }.toCell(),
-                code: nft_init.code,
-                data: nft_init.data
-            });
-        self.next_item_index = self.next_item_index + 1;
-    }
-
-    receive(msg: GetRoyaltyParams) {   
-        let ctx: Context = context(); // get sender Info
-        send(SendParameters{
-            to: ctx.sender,
+            to: contractAddress(initCode), 
             value: 0,
-            mode: 64, 
+            mode: SendIgnoreErrors + SendRemainingValue,
+            body: Init { 
+                admin: self.admin,
+                owner: msg.owner
+            }.toCell(),
+            code: initCode.code,
+            data: initCode.data
+        });
+    }
+
+    receive(msg: FinishedBuy) {
+        require(context().sender == self.get_balance_address_in_each_user(msg.index, msg.original_sender), "Only owner can finish buy shares");
+        let value: Int = self.msgValue(context().value);
+        let fee: Int = msg.charge_ton * self.fee / 1000; // 50 / 1000 = 10%
+        let refund: Int = value - msg.charge_ton - fee - fee - ton("0.05");
+        send(SendParameters{
+            to: self.admin, 
+            value: fee, 
+            mode: SendPayGasSeparately + SendIgnoreErrors,
             bounce: false,
-            body: ReportRoyaltyParams {
-                query_id: msg.query_id,
-                numerator:  self.royalty_params.numerator,
-                denominator: self.royalty_params.denominator,
-                destination: self.owner_address
-            }.toCell()
-        });        
+            body: "Protocol Fee".asComment()
+        });
+        send(SendParameters{
+            to: self.get_role_address(msg.index), 
+            value: fee,
+            mode: SendPayGasSeparately + SendIgnoreErrors,
+            bounce: false,
+            body: "Subject Fee".asComment()
+        });
+        send(SendParameters{ // Refund the rest of the money
+            to: msg.original_sender, 
+            value: refund,
+            mode: SendPayGasSeparately + SendIgnoreErrors,
+            body: "Successfully bought shares".asComment()
+        });
     }
 
-    // ------------------ Get Function  ------------------ //
-    get fun get_collection_data(): CollectionData {     
-        let b: StringBuilder = beginString();
-        let collectionDataString: String = self.collection_content.asSlice().asString();
-        b.append(collectionDataString);
-        b.append("meta.json"); // You can changed this your self.
-        return CollectionData{
-            next_item_index: self.next_item_index, 
-            collection_content: b.toCell(), 
-            owner_address: self.owner_address
-        };
+    receive(msg: Redeem) {
+        let ctx: Context = context();
+        require(ctx.sender == self.get_role_address(msg.index), "Only User contract can redeem shares");
+        let value: Int = self.msgValue(context().value);
+        let fee: Int = msg.redeem_ton * self.fee / 1000; 
+        let refund: Int = msg.redeem_ton + value - fee - fee - ton("0.05");
+        send(SendParameters{
+            to: self.admin, 
+            value: fee, 
+            mode: SendPayGasSeparately + SendIgnoreErrors,
+            bounce: false,
+            body: "Protocol Fee".asComment()
+        });
+        send(SendParameters{
+            to: self.get_role_address(msg.index), 
+            value: fee,
+            mode: SendPayGasSeparately + SendIgnoreErrors,
+            bounce: false,
+            body: "Subject Fee".asComment()
+        });
+        send(SendParameters{
+            to: msg.sender, 
+            value: refund,
+            mode: SendPayGasSeparately + SendIgnoreErrors,
+            body: "Successfully sell shares".asComment()
+        });    
     }
 
-    get fun get_nft_address_by_index(item_index: Int): Address?{      
-        let initCode: StateInit = self.getNftItemInit(item_index);
+    get fun get_balance_address_in_each_user(index: Int, owner: Address): Address {
+        let initCode: StateInit = initOf Balance(myAddress(), self.get_role_address(index), index, owner);
         return contractAddress(initCode);
     }
 
-    get fun getNftItemInit(item_index: Int): StateInit {
-        return initOf NftItem(myAddress(), item_index, self.owner_address, self.collection_content);
-    }
-    
-    get fun get_nft_content(index: Int, individual_content: Cell): Cell { 
-        let b: StringBuilder = beginString();
-        let ic: String = individual_content.asSlice().asString();
-        b.append(ic);
-        return b.toCell();
+    get fun get_role_address(index: Int): Address { 
+        let initCode: StateInit = initOf Role(myAddress(), index, self.admin);
+        return contractAddress(initCode);
     }
 
-    get fun royalty_params(): RoyaltyParams {
-        return self.royalty_params;
-    }
-}
-
-message(0x693d3950) GetRoyaltyParams {
-    query_id: Int as uint64;
-}
-
-message(0xa8cb00ad) ReportRoyaltyParams {
-    query_id: Int as uint64;
-    numerator:  Int as uint16;
-    denominator: Int as uint16;
-    destination: Address;
-}
-
-struct CollectionData {
-    next_item_index: Int;
-    collection_content: Cell;
-    owner_address: Address;
-}
-
-struct RoyaltyParams {
-    numerator: Int;
-    denominator: Int;
-    destination: Address;
-}
-
-// ---------------------------------------------------------------------------------------------------- //
-contract NftItem {
-    collection_address: Address;
-    item_index: Int; 
-    owner: Address;
-    individual_content: Cell;
-    is_initialized: Bool;
-
-    init(collection_address: Address, item_index: Int, owner: Address, individual_content: Cell){
-        self.collection_address = collection_address;
-        self.item_index = item_index;
-        self.owner = collection_address;
-        self.individual_content = individual_content;
-        self.is_initialized = false;
-    }
-
-    receive(msg: Transfer){
-        let ctx: Context = context();
-        
-        // Only Owner of the this NFT Item can transfer it.
-        require(ctx.sender == self.owner, "not owner");
-    
-        let msgValue: Int = ctx.value; // Check the gasCost for storage
+    fun msgValue(msgValue: Int): Int {
         let tonBalanceBeforeMsg: Int = myBalance() - msgValue;
         let storageFee: Int = minTonsForStorage - min(tonBalanceBeforeMsg, minTonsForStorage);
         msgValue = msgValue - (storageFee + gasConsumption);
+        return msgValue;
+    }
+}
 
-        if (self.is_initialized == false) {  // Initial Transfer, aka the "Minting" of the NFT
-            self.is_initialized = true;
-            self.owner = msg.new_owner;
-            send(SendParameters{
-                to: msg.response_destination,
-                value: 0,
-                mode:  SendIgnoreErrors + SendRemainingValue,
-                body: Excesses { query_id: msg.query_id }.toCell()
-            });
-        } else {
-            // change current owner to the new_owner
-            self.owner = msg.new_owner; 
-            if (msg.forward_amount > 0) {
-                send(SendParameters{
-                    to: msg.new_owner,
-                    value: msg.forward_amount,
-                    mode: SendIgnoreErrors, 
-                    bounce: false,
-                    body: OwnershipAssigned{
-                        query_id: msg.query_id,
-                        prev_owner: ctx.sender,
-                        forward_payload: msg.forward_payload
-                    }.toCell()
-                }); 
-            }
-            msgValue = msgValue - ctx.readForwardFee(); 
-            if (msg.response_destination != null) { 
-                send(SendParameters{ 
-                    to: msg.response_destination,
-                    value: msgValue - msg.forward_amount,
-                    mode: SendPayGasSeparately,
-                    body: Excesses { query_id: msg.query_id }.toCell()
-                });
-            } 
-        }
+message Init {
+    admin: Address;
+    owner: Address;
+}
+
+message BuyShares {
+    query_id: Int as uint64;
+    amount: Int as uint16;
+}
+
+message SellNotification {
+    query_id: Int as uint64;
+    amount: Int as uint16;
+    sender: Address;
+}
+contract Role {
+    main: Address;
+    supply: Int as uint16 = 0;
+    index: Int as uint32;
+    admin: Address;
+    owner: Address?;
+
+    init(main: Address, index: Int, admin: Address) {
+        self.main = main;
+        self.index = index;
+        self.admin = admin;
+    }
+
+    receive(msg: Init) {
+        require(context().sender == self.main, "not main contract");
+        self.owner = msg.owner;
+        let value: Int = self.msgValue(context().value);
+        send(SendParameters{
+            to: self.admin,
+            value: value,
+            mode: SendIgnoreErrors,
+            body: "Success".asComment()
+        });
+    }
+
+    receive(msg: BuyShares) {
+        let ctx: Context = context(); 
+        require(ctx.value >= ton("0.15"), "Must pay at least 0.15 TON");
+        let charge_ton: Int = self.getPrice(self.supply, msg.amount);
+        require(ctx.value >= charge_ton + ton("0.15"), "Not enough money to buy shares");
+
+        self.supply = self.supply + msg.amount;
+        
+        let value: Int = self.msgValue(ctx.value);
+        let initCode: StateInit = initOf Balance(self.main, myAddress(), self.index, ctx.sender);
+        send(SendParameters{
+            to: contractAddress(initCode),
+            value: value,
+            mode: SendIgnoreErrors,
+            body: Add { // adding#14428423
+                query_id: msg.query_id,
+                charge_ton: charge_ton,
+                amount: msg.amount, 
+                final_supply: self.supply 
+            }.toCell(), 
+            bounce: false,
+            code: initCode.code,
+            data: initCode.data
+        });
     }
     
-    receive(msg: GetStaticData){ 
-        let ctx: Context = context();
-        send(SendParameters {
-            to: ctx.sender,
+    receive(msg: SellNotification) {
+        require(context().sender == self.get_balance_address(msg.sender), "Only Balance can sell shares");
+
+        self.supply = self.supply - msg.amount;
+        require(self.supply >= 0, "Not enough shares to sell");
+
+        let redeem_ton: Int = self.getPrice(self.supply, msg.amount);
+        send(SendParameters{
+            to: self.main,
             value: 0,
-            mode: 64,  // (return msg amount except gas fees) 
-            bounce: true,
-            body: ReportStaticData{
+            mode: SendRemainingValue,
+            bounce: false,
+            body: Redeem {
                 query_id: msg.query_id,
-                index_id: self.item_index,
-                collection: self.collection_address
+                redeem_ton: redeem_ton,
+                amount: msg.amount,
+                final_supply: self.supply,
+                index: self.index,
+                sender: msg.sender
+            }.toCell()
+        });
+    }
+    
+    fun getPrice(supply: Int, amount: Int): Int {
+        if (supply == 0) {
+            let sum1: Int = 0;
+            if (amount == 1) {
+                let sum2: Int = 0;
+                return (sum2 - sum1) * ton("1") / 16000;
+            } else {
+                let sum2: Int = ((supply - 1 + amount) * (supply + amount) * ( (2 * (supply + amount - 1)) + 1)) / 6;
+                return (sum2 - sum1) * ton("1") / 16000;
+            }
+        } else {
+            let sum1: Int = (supply - 1) * supply * (2 * (supply - 1) + 1) / 6;
+            let sum2: Int = (supply + amount - 1) * (supply + amount) * (2 * (supply + amount - 1) + 1) / 6;
+            return (sum2 - sum1) * ton("1") / 16000;
+        }
+    }
+    fun msgValue(msgValue: Int): Int {
+        let tonBalanceBeforeMsg: Int = myBalance() - msgValue;
+        let storageFee: Int = minTonsForStorage - min(tonBalanceBeforeMsg, minTonsForStorage);
+        msgValue = msgValue - (storageFee + gasConsumption);
+        return msgValue;
+    }
+
+    fun get_balance_address(owner: Address): Address {
+        let initCode: StateInit = initOf Balance(self.main, myAddress(), self.index, owner);
+        return contractAddress(initCode);
+    }
+}
+
+message Add {
+    query_id: Int as uint64;
+    charge_ton: Int as coins;
+    amount: Int as uint16;
+    final_supply: Int as uint16;   
+}
+message Sell {
+    query_id: Int as uint64;
+    amount: Int as uint16;
+}
+contract Balance {
+    main: Address;
+    role: Address;
+    index: Int as uint32;
+    owner: Address;
+    balance: Int as uint32 = 0;
+
+    init(main: Address, role: Address, index: Int, owner: Address) {
+        self.main = main;
+        self.role = role;
+        self.index = index;
+        self.owner = owner;
+    }
+
+    receive(msg: Add) {
+        let ctx: Context = context(); 
+        require(ctx.sender == self.role, "Only Profile can call");
+        self.balance = self.balance + msg.amount;
+
+        // Fallback message to remind the factory contract that the buy shares is finished
+        self.forward(
+            self.main,
+            FinishedBuy{
+                query_id: msg.query_id,
+                charge_ton: msg.charge_ton,
+                amount: msg.amount,
+                final_supply: msg.final_supply,
+                original_sender: self.owner, 
+                index: self.index
+            }.toCell(),
+            false,
+            null
+        );
+    }
+
+    receive(msg: Sell) {
+        let ctx: Context = context(); 
+        require(ctx.sender == self.owner, "Only owner can sell shares");
+
+        self.balance = self.balance - msg.amount;
+        require(self.balance >= 0, "Not enough shares to sell");
+        
+        send(SendParameters{
+            to: self.role,
+            value: 0,
+            bounce: true,
+            mode: SendRemainingValue + SendIgnoreErrors,
+            body: SellNotification {
+                query_id: msg.query_id,
+                amount: msg.amount,
+                sender: self.owner
             }.toCell()
         });
     }
 
-    // --------- Get Function  --------- //
-    get fun get_nft_data(): GetNftData {
-        let b: StringBuilder = beginString();
-        let collectionData: String = self.individual_content.asSlice().asString();
-        b.append(collectionData);
-        b.append(self.item_index.toString());
-        b.append(".json");
+    get fun get_balance_key(): Int {
+        return self.balance;
+    }
 
-        return GetNftData {
-            is_initialized: self.is_initialized, 
-            index: self.item_index, 
-            collection_address: self.collection_address, 
-            owner_address: self.owner,
-            individual_content: b.toCell()
+    get fun get_balanceData(): BalanceData {
+        return BalanceData {
+            main: self.main,
+            role: self.role,
+            index: self.index,
+            owner: self.owner
         };
     }
 }
-// ---------------------------------------------------------------------------------------------------- //
-message(0x5fcc3d14) Transfer { 
-    query_id: Int as uint64;            
-    new_owner: Address; 
-    response_destination: Address; 
-    custom_payload: Cell?; 
-    forward_amount: Int as coins; 
-    forward_payload: Slice as remaining; 
-}
 
-message(0x05138d91) OwnershipAssigned{
-    query_id: Int as uint64;
-    prev_owner: Address;
-    forward_payload: Slice as remaining; 
-}
-
-message(0xd53276db) Excesses {
-    query_id: Int as uint64;
-}
-
-message(0x2fcb26a2) GetStaticData { 
-    query_id: Int as uint64;
-}
-
-message(0x8b771735) ReportStaticData{
-    query_id: Int as uint64;
-    index_id: Int;
-    collection: Address;
-}
-
-struct GetNftData { 
-    is_initialized: Bool;
-    index: Int;
-    collection_address: Address; 
-    owner_address: Address;
-    individual_content: Cell;
+struct BalanceData {
+    main: Address;
+    role: Address;
+    index: Int as uint32;
+    owner: Address;
 }
