@@ -1,27 +1,7 @@
+import "/message";
 const minTonsForStorage: Int = ton("0.04");
 const gasConsumption: Int = ton("0.04");
 
-message Create {
-    owner: Address;
-}
-
-message FinishedBuy {
-    query_id: Int as uint64;
-    charge_ton: Int as coins;
-    amount: Int as uint16;
-    final_supply: Int as uint16;
-    original_sender: Address;
-    index: Int as uint32;
-}
-
-message Redeem {
-    query_id: Int as uint64;
-    redeem_ton: Int as coins;
-    amount: Int as uint16;
-    final_supply: Int as uint16;
-    index: Int as uint32;
-    sender: Address;
-}
 
 contract Main {
     index: Int as uint32 = 0;
@@ -125,22 +105,6 @@ contract Main {
     get fun get_index(): Int {
         return self.index;
     }
-}
-
-message Init {
-    admin: Address;
-    owner: Address;
-}
-
-message BuyShares {
-    query_id: Int as uint64;
-    amount: Int as uint16;
-}
-
-message SellNotification {
-    query_id: Int as uint64;
-    amount: Int as uint16;
-    sender: Address;
 }
 
 contract Role {
@@ -272,25 +236,6 @@ contract Role {
     }
 }
 
-struct RoleData {
-    main: Address;
-    supply: Int as uint16;
-    index: Int as uint32;
-    admin: Address;
-    owner: Address;
-}
-
-message Add {
-    query_id: Int as uint64;
-    charge_ton: Int as coins;
-    amount: Int as uint16;
-    final_supply: Int as uint16;   
-}
-message Sell {
-    query_id: Int as uint64;
-    amount: Int as uint16;
-}
-
 contract Balance {
     main: Address;
     role: Address;
@@ -361,9 +306,3 @@ contract Balance {
     }
 }
 
-struct BalanceData {
-    main: Address;
-    role: Address;
-    index: Int as uint32;
-    owner: Address;
-}
