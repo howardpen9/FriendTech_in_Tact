@@ -1,5 +1,5 @@
-const minTonsForStorage: Int = ton("0.03");
-const gasConsumption: Int = ton("0.03");
+const minTonsForStorage: Int = ton("0.04");
+const gasConsumption: Int = ton("0.04");
 
 message Create {
     owner: Address;
@@ -121,6 +121,10 @@ contract Main {
         msgValue = msgValue - (storageFee + gasConsumption);
         return msgValue;
     }
+
+    get fun get_index(): Int {
+        return self.index;
+    }
 }
 
 message Init {
@@ -138,6 +142,7 @@ message SellNotification {
     amount: Int as uint16;
     sender: Address;
 }
+
 contract Role {
     main: Address;
     supply: Int as uint16 = 0;
@@ -177,7 +182,7 @@ contract Role {
             to: contractAddress(initCode),
             value: value,
             mode: SendIgnoreErrors,
-            body: Add { // adding#14428423
+            body: Add { // add#df5f1a25
                 query_id: msg.query_id,
                 charge_ton: charge_ton,
                 amount: msg.amount, 
@@ -211,10 +216,23 @@ contract Role {
             }.toCell()
         });
     }
+
+    receive(){}
+    receive(msg: Slice) {}
+    receive("Claim"){
+        require(context().sender == self.owner, "Only owner can claim");
+        send(SendParameters{
+            to: self.owner!!,
+            value: 0,
+            mode: SendRemainingBalance + SendIgnoreErrors,
+            bounce: false,
+            body: "Claimed".asComment()
+        });
+    }
     
     fun getPrice(supply: Int, amount: Int): Int {
         if (supply == 0) {
-            let sum1: Int = 0;
+            let sum1: Int = 0; 
             if (amount == 1) {
                 let sum2: Int = 0;
                 return (sum2 - sum1) * ton("1") / 16000;
@@ -228,6 +246,7 @@ contract Role {
             return (sum2 - sum1) * ton("1") / 16000;
         }
     }
+
     fun msgValue(msgValue: Int): Int {
         let tonBalanceBeforeMsg: Int = myBalance() - msgValue;
         let storageFee: Int = minTonsForStorage - min(tonBalanceBeforeMsg, minTonsForStorage);
@@ -235,10 +254,30 @@ contract Role {
         return msgValue;
     }
 
-    fun get_balance_address(owner: Address): Address {
+    get fun get_balance_address(owner: Address): Address {
         let initCode: StateInit = initOf Balance(self.main, myAddress(), self.index, owner);
         return contractAddress(initCode);
     }
+
+    get fun get_owner(): Address {
+        return self.owner!!;
+    }
+
+    get fun totalSupply(): Int {
+        return self.supply;
+    }
+
+    get fun get_pricing_data(key_qty: Int): Int {
+        return self.getPrice(self.supply, key_qty);
+    }
+}
+
+struct RoleData {
+    main: Address;
+    supply: Int as uint16;
+    index: Int as uint32;
+    admin: Address;
+    owner: Address;
 }
 
 message Add {
@@ -251,6 +290,7 @@ message Sell {
     query_id: Int as uint64;
     amount: Int as uint16;
 }
+
 contract Balance {
     main: Address;
     role: Address;
@@ -273,7 +313,7 @@ contract Balance {
         // Fallback message to remind the factory contract that the buy shares is finished
         self.forward(
             self.main,
-            FinishedBuy{
+            FinishedBuy{ // 563eae5c
                 query_id: msg.query_id,
                 charge_ton: msg.charge_ton,
                 amount: msg.amount,
@@ -285,6 +325,7 @@ contract Balance {
             null
         );
     }
+
 
     receive(msg: Sell) {
         let ctx: Context = context(); 
@@ -306,7 +347,7 @@ contract Balance {
         });
     }
 
-    get fun get_balance_key(): Int {
+    get fun get_balance(): Int {
         return self.balance;
     }
 

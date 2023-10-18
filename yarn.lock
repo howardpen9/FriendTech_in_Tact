@@ -1338,6 +1338,11 @@ dot-case@^3.0.4:
     no-case "^3.0.4"
     tslib "^2.0.3"
 
+dotenv@^16.3.1:
+  version "16.3.1"
+  resolved "https://registry.yarnpkg.com/dotenv/-/dotenv-16.3.1.tgz#369034de7d7e5b120972693352a3bf112172cc3e"
+  integrity sha512-IPzF4w4/Rd94bA9imS68tZBaYyBWSCE47V1RGuMrB94iyTOIEwRmVL2x/4An+6mETpLrKJ5hQkB8W4kFAadeIQ==
+
 electron-to-chromium@^1.4.284:
   version "1.4.284"
   resolved "https://registry.npmjs.org/electron-to-chromium/-/electron-to-chromium-1.4.284.tgz"
@@ -2901,10 +2906,10 @@ ton-crypto@^3.2.0:
     ton-crypto-primitives "2.0.0"
     tweetnacl "1.0.3"
 
-ton@^13.1.0:
-  version "13.5.0"
-  resolved "https://registry.yarnpkg.com/ton/-/ton-13.5.0.tgz#a9d9ebf8afe7b8f0bf7d817f02ee562369a8d886"
-  integrity sha512-pfuw1HQNurW3OGFTCM2JebLOYIwk8TJEjsbt0aSBUqBmPpayPkfWvkOa4xjJoFdRvb3+q3si2ePOdUfATXsI4g==
+ton@^13.4.1:
+  version "13.6.1"
+  resolved "https://registry.yarnpkg.com/ton/-/ton-13.6.1.tgz#72b8b4da460f67209a1a7594452b28d027abd531"
+  integrity sha512-CZlFsmO+l+uPSI2zgnUd8zCS5XuWnUSFRVUjRGl5X5fKXYnjaVba4vMaIyFTJwel+uEMnolGMSlNP8DAa9mfVg==
   dependencies:
     axios "^0.25.0"
     dataloader "^2.0.0"
