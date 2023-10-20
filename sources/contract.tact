@@ -1,4 +1,4 @@
-import "/message";
+import "./message";
 const minTonsForStorage: Int = ton("0.04");
 const gasConsumption: Int = ton("0.04");
 
