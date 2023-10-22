@@ -1,10 +1,23 @@
-# Boilerplate for Friend Tech implement in Tact lanaugage
+# Boilerplate for Implementing Friend Tech Protocol in Tact Language on TON Blockchain
 
-This is a template for Friend Tech protocol implementation in TON Blockchain through Tact language.
+This boilerplate serves as a template for implementing the Friend Tech protocol on the TON Blockchain using the Tact programming language. The pricing structure adheres to a predetermined equation. Please feel free to verify the code before using it; use it at your own risk.
 
-The pricing formulate is followed the same equation.
+## Key Components
 
-Feel free to use and verify the code and use in your own risk.
+-   There are three primary smart contracts involved:
+    1. Main Contract
+    2. Role Contract
+    3. Balance Contract
+
+## Administrative Permissions
+
+-   Only an admin address has the authority to create a new Role contract. The admin can assign individuals as owners, also referred to as "Profiles for Celebrities."
+
+## Fee Structure
+
+-   A transaction fee of 10% will be applied when people purchase shares. Of this fee, 5% will go towards the protocol, and the remaining 5% will be allocated to the owner of the Profile Contract.
+
+# Commends
 
 ```bash
 yarn build # To build contract

@@ -2,7 +2,6 @@ import "./message";
 const minTonsForStorage: Int = ton("0.04");
 const gasConsumption: Int = ton("0.04");
 
-
 contract Main {
     index: Int as uint32 = 0;
     fee: Int as uint8;
@@ -21,10 +20,7 @@ contract Main {
             to: contractAddress(initCode), 
             value: 0,
             mode: SendIgnoreErrors + SendRemainingValue,
-            body: Init { 
-                admin: self.admin,
-                owner: msg.owner
-            }.toCell(),
+            body: Init { admin: self.admin, owner: msg.owner }.toCell(),
             code: initCode.code,
             data: initCode.data
         });
