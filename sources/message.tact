@@ -8,7 +8,6 @@ message FinishedBuy {
     amount: Int as uint16;
     final_supply: Int as uint16;
     original_sender: Address;
-    index: Int as uint32;
 }
 
 message Redeem {
@@ -51,7 +50,6 @@ message Sell {
 struct BalanceData {
     main: Address;
     role: Address;
-    index: Int as uint32;
     owner: Address;
 }
 
