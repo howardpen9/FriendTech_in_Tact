@@ -5,13 +5,23 @@ This boilerplate serves as a template for implementing the Friend Tech protocol 
 ## Key Components
 
 -   There are three primary smart contracts involved:
+
     1. Main Contract
     2. Role Contract
     3. Balance Contract
 
+![imsage](image/1.png)
+
 ## Administrative Permissions
 
 -   Only an admin address has the authority to create a new Role contract. The admin can assign individuals as owners, also referred to as "Profiles for Celebrities."
+
+![image](image/3.png)
+
+## Buy Shares
+
+Anyone can buy the shares for any Profile contract they like.
+![image](image/2.png)
 
 ## Fee Structure
 

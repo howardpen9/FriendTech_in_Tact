@@ -82,7 +82,7 @@ contract Main {
     }
 
     get fun get_balance_address_in_each_user(index: Int, owner: Address): Address {
-        let initCode: StateInit = initOf Balance(myAddress(), self.get_role_address(index), index, owner);
+        let initCode: StateInit = initOf Balance(myAddress(), self.get_role_address(index), owner);
         return contractAddress(initCode);
     }
 
@@ -137,7 +137,7 @@ contract Role {
         self.supply = self.supply + msg.amount;
         
         let value: Int = self.msgValue(ctx.value);
-        let initCode: StateInit = initOf Balance(self.main, myAddress(), self.index, ctx.sender);
+        let initCode: StateInit = initOf Balance(self.main, myAddress(), ctx.sender);
         send(SendParameters{
             to: contractAddress(initCode),
             value: value,
@@ -215,7 +215,7 @@ contract Role {
     }
 
     get fun get_balance_address(owner: Address): Address {
-        let initCode: StateInit = initOf Balance(self.main, myAddress(), self.index, owner);
+        let initCode: StateInit = initOf Balance(self.main, myAddress(), owner);
         return contractAddress(initCode);
     }
 
@@ -235,14 +235,12 @@ contract Role {
 contract Balance {
     main: Address;
     role: Address;
-    index: Int as uint32;
     owner: Address;
     balance: Int as uint32 = 0;
 
-    init(main: Address, role: Address, index: Int, owner: Address) {
+    init(main: Address, role: Address, owner: Address) {
         self.main = main;
         self.role = role;
-        self.index = index;
         self.owner = owner;
     }
 
@@ -259,8 +257,7 @@ contract Balance {
                 charge_ton: msg.charge_ton,
                 amount: msg.amount,
                 final_supply: msg.final_supply,
-                original_sender: self.owner, 
-                index: self.index
+                original_sender: self.owner
             }.toCell(),
             false,
             null
@@ -296,7 +293,6 @@ contract Balance {
         return BalanceData {
             main: self.main,
             role: self.role,
-            index: self.index,
             owner: self.owner
         };
     }
