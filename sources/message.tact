@@ -8,6 +8,7 @@ message FinishedBuy {
     amount: Int as uint16;
     final_supply: Int as uint16;
     original_sender: Address;
+    index: Int as uint32;
 }
 
 message Redeem {
@@ -40,6 +41,7 @@ message Add {
     charge_ton: Int as coins;
     amount: Int as uint16;
     final_supply: Int as uint16;   
+    index: Int as uint32;
 }
 
 message Sell {

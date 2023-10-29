@@ -29,8 +29,14 @@ contract Main {
     receive(msg: FinishedBuy) {
         require(context().sender == self.get_balance_address_in_each_user(msg.index, msg.original_sender), "Only owner can finish buy shares");
         let value: Int = self.msgValue(context().value);
-        let fee: Int = msg.charge_ton * self.fee / 1000; // 50 / 1000 = 10%
+        let fee: Int = msg.charge_ton * self.fee / 1000; // 50 / 1000 = 5%
+        self.manageFeeSending(fee, msg.index);
+
         let refund: Int = value - msg.charge_ton - fee - fee - ton("0.05");
+        self.returnRest(refund, msg.original_sender, true);
+    }
+
+    fun manageFeeSending(fee: Int, index: Int) {
         send(SendParameters{
             to: self.admin, 
             value: fee, 
@@ -39,18 +45,30 @@ contract Main {
             body: "Protocol Fee".asComment()
         });
         send(SendParameters{
-            to: self.get_role_address(msg.index), 
+            to: self.get_role_address(index), 
             value: fee,
             mode: SendPayGasSeparately + SendIgnoreErrors,
             bounce: false,
             body: "Subject Fee".asComment()
         });
-        send(SendParameters{ // Refund the rest of the money
-            to: msg.original_sender, 
-            value: refund,
-            mode: SendPayGasSeparately + SendIgnoreErrors,
-            body: "Successfully bought shares".asComment()
-        });
+    }
+    
+    fun returnRest(refund: Int, original_sender: Address, is_buy: Bool) {
+        if (is_buy) {
+            send(SendParameters{ // Refund the rest of the money
+                to: original_sender, 
+                value: refund,
+                mode: SendPayGasSeparately + SendIgnoreErrors,
+                body: "Successfully bought shares".asComment()
+            });
+        } else {    
+            send(SendParameters{
+                to: original_sender, 
+                value: refund,
+                mode: SendPayGasSeparately + SendIgnoreErrors,
+                body: "Successfully sell shares".asComment()
+            });   
+        }
     }
 
     receive(msg: Redeem) {
@@ -58,27 +76,31 @@ contract Main {
         require(ctx.sender == self.get_role_address(msg.index), "Only User contract can redeem shares");
         let value: Int = self.msgValue(context().value);
         let fee: Int = msg.redeem_ton * self.fee / 1000; 
-        let refund: Int = msg.redeem_ton + value - fee - fee - ton("0.05");
-        send(SendParameters{
-            to: self.admin, 
-            value: fee, 
-            mode: SendPayGasSeparately + SendIgnoreErrors,
-            bounce: false,
-            body: "Protocol Fee".asComment()
-        });
-        send(SendParameters{
-            to: self.get_role_address(msg.index), 
-            value: fee,
-            mode: SendPayGasSeparately + SendIgnoreErrors,
-            bounce: false,
-            body: "Subject Fee".asComment()
-        });
-        send(SendParameters{
-            to: msg.sender, 
-            value: refund,
-            mode: SendPayGasSeparately + SendIgnoreErrors,
-            body: "Successfully sell shares".asComment()
-        });    
+        self.manageFeeSending(fee, msg.index);
+
+        // send(SendParameters{
+        //     to: self.admin, 
+        //     value: fee, 
+        //     mode: SendPayGasSeparately + SendIgnoreErrors,
+        //     bounce: false,
+        //     body: "Protocol Fee".asComment()
+        // });
+        // send(SendParameters{
+        //     to: self.get_role_address(msg.index), 
+        //     value: fee,
+        //     mode: SendPayGasSeparately + SendIgnoreErrors,
+        //     bounce: false,
+        //     body: "Subject Fee".asComment()
+        // });
+
+        let refund: Int = value + msg.redeem_ton - fee - fee - ton("0.05");
+        self.returnRest(refund, msg.sender, false);
+        // send(SendParameters{
+        //     to: msg.sender, 
+        //     value: refund,
+        //     mode: SendPayGasSeparately + SendIgnoreErrors,
+        //     body: "Successfully sell shares".asComment()
+        // });    
     }
 
     get fun get_balance_address_in_each_user(index: Int, owner: Address): Address {
@@ -146,7 +168,8 @@ contract Role {
                 query_id: msg.query_id,
                 charge_ton: charge_ton,
                 amount: msg.amount, 
-                final_supply: self.supply 
+                final_supply: self.supply,
+                index: self.index
             }.toCell(), 
             bounce: false,
             code: initCode.code,
@@ -257,13 +280,13 @@ contract Balance {
                 charge_ton: msg.charge_ton,
                 amount: msg.amount,
                 final_supply: msg.final_supply,
-                original_sender: self.owner
+                original_sender: self.owner,
+                index: msg.index
             }.toCell(),
             false,
             null
         );
     }
-
 
     receive(msg: Sell) {
         let ctx: Context = context(); 
@@ -297,4 +320,3 @@ contract Balance {
         };
     }
 }
-
