@@ -36,6 +36,17 @@ contract Main {
         self.returnRest(refund, msg.original_sender, true);
     }
 
+    receive(msg: Redeem) {
+        let ctx: Context = context();
+        require(ctx.sender == self.get_role_address(msg.index), "Only User contract can redeem shares");
+        let value: Int = self.msgValue(context().value);
+        let fee: Int = msg.redeem_ton * self.fee / 1000; 
+        self.manageFeeSending(fee, msg.index);
+
+        let refund: Int = value + msg.redeem_ton - fee - fee - ton("0.05");
+        self.returnRest(refund, msg.sender, false);  
+    }
+
     fun manageFeeSending(fee: Int, index: Int) {
         send(SendParameters{
             to: self.admin, 
@@ -71,37 +82,14 @@ contract Main {
         }
     }
 
-    receive(msg: Redeem) {
-        let ctx: Context = context();
-        require(ctx.sender == self.get_role_address(msg.index), "Only User contract can redeem shares");
-        let value: Int = self.msgValue(context().value);
-        let fee: Int = msg.redeem_ton * self.fee / 1000; 
-        self.manageFeeSending(fee, msg.index);
-
-        // send(SendParameters{
-        //     to: self.admin, 
-        //     value: fee, 
-        //     mode: SendPayGasSeparately + SendIgnoreErrors,
-        //     bounce: false,
-        //     body: "Protocol Fee".asComment()
-        // });
-        // send(SendParameters{
-        //     to: self.get_role_address(msg.index), 
-        //     value: fee,
-        //     mode: SendPayGasSeparately + SendIgnoreErrors,
-        //     bounce: false,
-        //     body: "Subject Fee".asComment()
-        // });
-
-        let refund: Int = value + msg.redeem_ton - fee - fee - ton("0.05");
-        self.returnRest(refund, msg.sender, false);
-        // send(SendParameters{
-        //     to: msg.sender, 
-        //     value: refund,
-        //     mode: SendPayGasSeparately + SendIgnoreErrors,
-        //     body: "Successfully sell shares".asComment()
-        // });    
+    fun msgValue(msgValue: Int): Int {
+        let tonBalanceBeforeMsg: Int = myBalance() - msgValue;
+        let storageFee: Int = minTonsForStorage - min(tonBalanceBeforeMsg, minTonsForStorage);
+        msgValue = msgValue - (storageFee + gasConsumption);
+        return msgValue;
     }
+
+
 
     get fun get_balance_address_in_each_user(index: Int, owner: Address): Address {
         let initCode: StateInit = initOf Balance(myAddress(), self.get_role_address(index), owner);
@@ -111,13 +99,6 @@ contract Main {
     get fun get_role_address(index: Int): Address { 
         let initCode: StateInit = initOf Role(myAddress(), index, self.admin);
         return contractAddress(initCode);
-    }
-
-    fun msgValue(msgValue: Int): Int {
-        let tonBalanceBeforeMsg: Int = myBalance() - msgValue;
-        let storageFee: Int = minTonsForStorage - min(tonBalanceBeforeMsg, minTonsForStorage);
-        msgValue = msgValue - (storageFee + gasConsumption);
-        return msgValue;
     }
 
     get fun get_index(): Int {
@@ -236,6 +217,7 @@ contract Role {
         msgValue = msgValue - (storageFee + gasConsumption);
         return msgValue;
     }
+
 
     get fun get_balance_address(owner: Address): Address {
         let initCode: StateInit = initOf Balance(self.main, myAddress(), owner);
