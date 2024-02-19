@@ -1,12 +1,12 @@
-import { beginCell, toNano, Cell, fromNano, TransactionDescriptionGeneric, TransactionComputeVm } from "ton";
+import { beginCell, toNano, Cell, fromNano, TransactionDescriptionGeneric, TransactionComputeVm } from "@ton/ton";
 import {
     Blockchain,
     SandboxContract,
     TreasuryContract,
     printTransactionFees,
     prettyLogTransactions,
-} from "@ton-community/sandbox";
-import "@ton-community/test-utils";
+} from "@ton/sandbox";
+import "@ton/test-utils";
 
 import { Main } from "./output/sample_Main";
 import { Role } from "./output/sample_Role";

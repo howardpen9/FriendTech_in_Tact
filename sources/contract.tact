@@ -17,7 +17,7 @@ contract Main {
         let initCode: StateInit = initOf Role(myAddress(), self.index, self.admin);
         self.index = self.index + 1;
         send(SendParameters{
-            to: contractAddress(initCode), 
+            to: contractAddress(initCode),  
             value: 0,
             mode: SendIgnoreErrors + SendRemainingValue,
             body: Init { admin: self.admin, owner: msg.owner }.toCell(),
@@ -88,8 +88,6 @@ contract Main {
         msgValue = msgValue - (storageFee + gasConsumption);
         return msgValue;
     }
-
-
 
     get fun get_balance_address_in_each_user(index: Int, owner: Address): Address {
         let initCode: StateInit = initOf Balance(myAddress(), self.get_role_address(index), owner);
@@ -217,7 +215,6 @@ contract Role {
         msgValue = msgValue - (storageFee + gasConsumption);
         return msgValue;
     }
-
 
     get fun get_balance_address(owner: Address): Address {
         let initCode: StateInit = initOf Balance(self.main, myAddress(), owner);
