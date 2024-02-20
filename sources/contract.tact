@@ -9,7 +9,7 @@ contract Main {
 
     init(admin: Address) {
         self.admin = admin;
-        self.fee = 50;
+        self.fee = 50; // Basic point for the fee is 5%
     }
 
     receive(msg: Create) {
@@ -19,8 +19,8 @@ contract Main {
         send(SendParameters{
             to: contractAddress(initCode),  
             value: 0,
-            mode: SendIgnoreErrors + SendRemainingValue,
-            body: Init { admin: self.admin, owner: msg.owner }.toCell(),
+            mode: SendRemainingValue,
+            body: InitRole { admin: self.admin, owner: msg.owner }.toCell(),
             code: initCode.code,
             data: initCode.data
         });
@@ -43,7 +43,7 @@ contract Main {
         let fee: Int = msg.redeem_ton * self.fee / 1000; 
         self.manageFeeSending(fee, msg.index);
 
-        let refund: Int = value + msg.redeem_ton - fee - fee - ton("0.05");
+        let refund: Int = value + msg.redeem_ton - fee - fee - ton("0.05"); // Extract buffer for us to send back
         self.returnRest(refund, msg.sender, false);  
     }
 
@@ -51,14 +51,14 @@ contract Main {
         send(SendParameters{
             to: self.admin, 
             value: fee, 
-            mode: SendPayGasSeparately + SendIgnoreErrors,
+            mode: SendPayGasSeparately,
             bounce: false,
             body: "Protocol Fee".asComment()
         });
         send(SendParameters{
             to: self.get_role_address(index), 
             value: fee,
-            mode: SendPayGasSeparately + SendIgnoreErrors,
+            mode: SendPayGasSeparately,
             bounce: false,
             body: "Subject Fee".asComment()
         });
@@ -69,14 +69,14 @@ contract Main {
             send(SendParameters{ // Refund the rest of the money
                 to: original_sender, 
                 value: refund,
-                mode: SendPayGasSeparately + SendIgnoreErrors,
+                mode: SendPayGasSeparately,
                 body: "Successfully bought shares".asComment()
             });
         } else {    
             send(SendParameters{
                 to: original_sender, 
                 value: refund,
-                mode: SendPayGasSeparately + SendIgnoreErrors,
+                mode: SendPayGasSeparately,
                 body: "Successfully sell shares".asComment()
             });   
         }
@@ -117,14 +117,14 @@ contract Role {
         self.admin = admin;
     }
 
-    receive(msg: Init) {
+    receive(msg: InitRole) {
         require(context().sender == self.main, "not main contract");
         self.owner = msg.owner;
         let value: Int = self.msgValue(context().value);
         send(SendParameters{
             to: self.admin,
             value: value,
-            mode: SendIgnoreErrors,
+            mode: SendPayGasSeparately,
             body: "Success".asComment()
         });
     }
@@ -132,18 +132,19 @@ contract Role {
     receive(msg: BuyShares) {
         let ctx: Context = context(); 
         require(ctx.value >= ton("0.15"), "Must pay at least 0.15 TON");
+
         let charge_ton: Int = self.getPrice(self.supply, msg.amount);
         require(ctx.value >= charge_ton + ton("0.15"), "Not enough money to buy shares");
 
         self.supply = self.supply + msg.amount;
         
-        let value: Int = self.msgValue(ctx.value);
+        let remainingValueSendBack: Int = self.msgValue(ctx.value);
         let initCode: StateInit = initOf Balance(self.main, myAddress(), ctx.sender);
         send(SendParameters{
             to: contractAddress(initCode),
-            value: value,
-            mode: SendIgnoreErrors,
-            body: Add { // add#df5f1a25
+            value: remainingValueSendBack,
+            mode: SendPayGasSeparately,
+            body: Add { // add#7007df46, 0x7007df46
                 query_id: msg.query_id,
                 charge_ton: charge_ton,
                 amount: msg.amount, 
@@ -186,7 +187,7 @@ contract Role {
         send(SendParameters{
             to: self.owner!!,
             value: 0,
-            mode: SendRemainingBalance + SendIgnoreErrors,
+            mode: SendRemainingBalance,
             bounce: false,
             body: "Claimed".asComment()
         });
@@ -254,7 +255,7 @@ contract Balance {
         // Fallback message to remind the factory contract that the buy shares is finished
         self.forward(
             self.main,
-            FinishedBuy{ // 563eae5c
+            FinishedBuy { // 563eae5c
                 query_id: msg.query_id,
                 charge_ton: msg.charge_ton,
                 amount: msg.amount,
@@ -278,7 +279,7 @@ contract Balance {
             to: self.role,
             value: 0,
             bounce: true,
-            mode: SendRemainingValue + SendIgnoreErrors,
+            mode: SendRemainingValue,
             body: SellNotification {
                 query_id: msg.query_id,
                 amount: msg.amount,

@@ -20,7 +20,7 @@ message Redeem {
     sender: Address;
 }
 
-message Init {
+message InitRole {
     admin: Address;
     owner: Address;
 }
